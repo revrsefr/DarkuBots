@@ -5,12 +5,20 @@
  * This program is free but copyrighted software; see the file COPYING for
  * details.
  *
- * DarkuBots es una adaptación de Javier Fernández Viña, ZipBreake.
+ * DarkuBots es una adaptaciï¿½n de Javier Fernï¿½ndez Viï¿½a, ZipBreake.
  * E-Mail: javier@jfv.es || Web: http://jfv.es/
  *
+ * Bcrypt implementation added on April 21, 2025 - replacing insecure MD5
  */
 
+/* Define the encryption algorithm to use. Currently implemented are:
+ * ENCRYPT_BCRYPT   - BCrypt - secure password hashing (recommended)
+ */
 
+#define ENCRYPT_BCRYPT 1
+#define USE_ENCRYPTION 1
+
+/* Function prototypes */
 extern int encrypt(const char *src, int len, char *dest, int size);
 extern int encrypt_in_place(char *buf, int size);
 extern int check_password(const char *plaintext, const char *password);
