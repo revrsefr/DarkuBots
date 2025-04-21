@@ -1,104 +1,354 @@
-/* Database file handling routines.
+/* Database handling routines with PostgreSQL support.
  *
  * Services is copyright (c) 1996-1999 Andy Church.
  *     E-mail: <achurch@dragonfire.net>
  * This program is free but copyrighted software; see the file COPYING for
  * details.
  *
- * DarkuBots es una adaptaciÛn de Javier Fern·ndez ViÒa, ZipBreake.
+ * DarkuBots es una adaptaci√≥n de Javier Fern√°ndez Vi√±a, ZipBreake.
  * E-Mail: javier@jfv.es || Web: http://jfv.es/
+ * 
+ * PostgreSQL support added on April 21, 2025 by reverse
  *
  */
 
 #include "services.h"
 #include "datafiles.h"
 #include <fcntl.h>
+#include <libpq-fe.h>
+
+/*************************************************************************/
+/************************* DATABASE CONFIGURATION ************************/
+/*************************************************************************/
+
+/* PostgreSQL connection parameters - could be moved to config.c */
+static char *DB_Host = "localhost";
+static char *DB_Port = "5432";
+static char *DB_Name = "darkubots";
+static char *DB_User = "darkubots";
+static char *DB_Pass = "secure_password_here"; /* TODO: Move this to a secure config */
+
+/* Global PostgreSQL connection handle */
+static PGconn *pg_conn = NULL;
+
+/* Initialize database connection */
+int db_init(void) 
+{
+    char conninfo[512];
+    
+    snprintf(conninfo, sizeof(conninfo), 
+             "host=%s port=%s dbname=%s user=%s password=%s",
+             DB_Host, DB_Port, DB_Name, DB_User, DB_Pass);
+    
+    pg_conn = PQconnectdb(conninfo);
+    
+    if (PQstatus(pg_conn) != CONNECTION_OK) {
+#ifndef NOT_MAIN
+        log("Failed to connect to PostgreSQL database: %s", 
+            PQerrorMessage(pg_conn));
+#endif
+        PQfinish(pg_conn);
+        pg_conn = NULL;
+        return 0;
+    }
+    
+    /* Start a transaction - we'll use this for all database operations */
+    PGresult *res = PQexec(pg_conn, "BEGIN");
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+#ifndef NOT_MAIN
+        log("Error starting transaction: %s", PQerrorMessage(pg_conn));
+#endif
+        PQclear(res);
+        PQfinish(pg_conn);
+        pg_conn = NULL;
+        return 0;
+    }
+    PQclear(res);
+    
+#ifndef NOT_MAIN
+    log("Connected to PostgreSQL database: %s", DB_Name);
+#endif
+    return 1;
+}
+
+/* Close database connection */
+void db_cleanup(void)
+{
+    if (pg_conn != NULL) {
+        /* Commit any pending changes before closing */
+        PGresult *res = PQexec(pg_conn, "COMMIT");
+        PQclear(res);
+        
+        PQfinish(pg_conn);
+        pg_conn = NULL;
+#ifndef NOT_MAIN
+        log("PostgreSQL database connection closed");
+#endif
+    }
+}
 
 /*************************************************************************/
 /*************************************************************************/
 
-/* Return the version number on the file.  Return 0 if there is no version
- * number or the number doesn't make sense (i.e. less than 1 or greater
- * than FILE_VERSION).
+/* Return the version number on the file or database.
+ * Return 0 if there is no version number or the number doesn't make sense 
+ * (i.e. less than 1 or greater than FILE_VERSION).
  */
 
 int get_file_version(dbFILE *f)
 {
-    FILE *fp = f->fp;
-    int version = fgetc(fp)<<24 | fgetc(fp)<<16 | fgetc(fp)<<8 | fgetc(fp);
-    if (ferror(fp)) {
+    int version = 0;
+    PGresult *res;
+    char query[256];
+    
+    if (f->mode == 'r') {
+        /* Query the version from the versions table */
+        snprintf(query, sizeof(query),
+                 "SELECT version FROM versions WHERE filename = '%s'",
+                 f->filename);
+        
+        res = PQexec(pg_conn, query);
+        
+        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 #ifndef NOT_MAIN
-	log_perror("Error reading version number on %s", f->filename);
+            log("Error retrieving version for %s: %s", 
+                f->filename, PQerrorMessage(pg_conn));
 #endif
-	return 0;
-    } else if (feof(fp)) {
+            PQclear(res);
+            return 0;
+        }
+        
+        /* Check if we got a result */
+        if (PQntuples(res) > 0) {
+            version = atoi(PQgetvalue(res, 0, 0));
+        } else {
 #ifndef NOT_MAIN
-	log("Error reading version number on %s: End of file detected",
-		f->filename);
+            log("No version found for %s", f->filename);
 #endif
-	return 0;
-    } else if (version > FILE_VERSION || version < 1) {
+            version = 0;
+        }
+        
+        PQclear(res);
+        
+        if (version > FILE_VERSION || version < 1) {
 #ifndef NOT_MAIN
-	log("Invalid version number (%d) on %s", version, f->filename);
+            log("Invalid version number (%d) for %s", version, f->filename);
 #endif
-	return 0;
+            return 0;
+        }
     }
+    
     return version;
 }
 
 /*************************************************************************/
 
-/* Write the current version number to the file.  Return 0 on error, 1 on
- * success.
+/* Write the current version number to the database.
+ * Return 0 on error, 1 on success.
  */
 
 int write_file_version(dbFILE *f)
 {
-    FILE *fp = f->fp;
-    if (
-	fputc(FILE_VERSION>>24 & 0xFF, fp) < 0 ||
-	fputc(FILE_VERSION>>16 & 0xFF, fp) < 0 ||
-	fputc(FILE_VERSION>> 8 & 0xFF, fp) < 0 ||
-	fputc(FILE_VERSION     & 0xFF, fp) < 0
-    ) {
+    PGresult *res;
+    char query[512];
+    
+    /* Create versions table if it doesn't exist */
+    res = PQexec(pg_conn, 
+          "CREATE TABLE IF NOT EXISTS versions ("
+          "    filename VARCHAR(255) PRIMARY KEY,"
+          "    version INTEGER NOT NULL,"
+          "    last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+          ")");
+    
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 #ifndef NOT_MAIN
-	log_perror("Error writing version number on %s", f->filename);
+        log("Error creating versions table: %s", PQerrorMessage(pg_conn));
 #endif
-	return 0;
+        PQclear(res);
+        return 0;
     }
+    PQclear(res);
+    
+    /* Update or insert version record */
+    snprintf(query, sizeof(query),
+             "INSERT INTO versions (filename, version) VALUES ('%s', %d) "
+             "ON CONFLICT (filename) DO UPDATE SET version = %d, "
+             "last_modified = CURRENT_TIMESTAMP",
+             f->filename, FILE_VERSION, FILE_VERSION);
+    
+    res = PQexec(pg_conn, query);
+    
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+#ifndef NOT_MAIN
+        log("Error writing version number for %s: %s", 
+            f->filename, PQerrorMessage(pg_conn));
+#endif
+        PQclear(res);
+        return 0;
+    }
+    
+    PQclear(res);
     return 1;
 }
 
 /*************************************************************************/
 /*************************************************************************/
 
+/* Structure to hold binary data for PostgreSQL */
+typedef struct {
+    char *data;      /* Binary data buffer */
+    size_t size;     /* Current size of data */
+    size_t alloc;    /* Allocated size of buffer */
+} BinaryBuffer;
+
+/* Initialize a binary buffer */
+static void init_binary_buffer(BinaryBuffer *buf)
+{
+    buf->data = NULL;
+    buf->size = 0;
+    buf->alloc = 0;
+}
+
+/* Append data to a binary buffer */
+static int append_binary_buffer(BinaryBuffer *buf, const void *data, size_t size)
+{
+    /* Allocate or expand buffer if needed */
+    if (buf->size + size > buf->alloc) {
+        size_t new_size = buf->alloc ? buf->alloc * 2 : 8192;
+        while (new_size < buf->size + size)
+            new_size *= 2;
+        
+        char *new_data = realloc(buf->data, new_size);
+        if (!new_data)
+            return 0;
+        
+        buf->data = new_data;
+        buf->alloc = new_size;
+    }
+    
+    /* Copy data to buffer */
+    memcpy(buf->data + buf->size, data, size);
+    buf->size += size;
+    
+    return 1;
+}
+
+/* Free a binary buffer */
+static void free_binary_buffer(BinaryBuffer *buf)
+{
+    if (buf->data) {
+        free(buf->data);
+    }
+    buf->data = NULL;
+    buf->size = 0;
+    buf->alloc = 0;
+}
+
+/*************************************************************************/
+
 static dbFILE *open_db_read(const char *service, const char *filename)
 {
     dbFILE *f;
-    FILE *fp;
+    PGresult *res;
+    char query[512];
+
+    /* Ensure we have a database connection */
+    if (!pg_conn && !db_init()) {
+#ifndef NOT_MAIN
+        log_perror("Cannot connect to database for reading %s database %s", 
+                   service, filename);
+#endif
+        return NULL;
+    }
 
     f = malloc(sizeof(*f));
     if (!f) {
 #ifndef NOT_MAIN
-	log_perror("Can't read %s database %s", service, filename);
+        log_perror("Can't allocate memory for %s database %s", service, filename);
 #endif
-	return NULL;
+        return NULL;
     }
+    
     strscpy(f->filename, filename, sizeof(f->filename));
     f->mode = 'r';
-    fp = fopen(f->filename, "rb");
-    if (!fp) {
-	int errno_save = errno;
+    f->pg_binary = malloc(sizeof(BinaryBuffer));
+    
+    if (!f->pg_binary) {
 #ifndef NOT_MAIN
-	if (errno != ENOENT)
-	    log_perror("Can't read %s database %s", service, f->filename);
+        log_perror("Can't allocate memory for binary buffer for %s database %s", 
+                   service, filename);
 #endif
-	free(f);
-	errno = errno_save;
-	return NULL;
+        free(f);
+        return NULL;
     }
-    f->fp = fp;
+    
+    init_binary_buffer(f->pg_binary);
+    
+    /* Check if the data exists in the database */
+    snprintf(query, sizeof(query), 
+             "SELECT data FROM dbfiles WHERE filename = '%s'", filename);
+    
+    res = PQexec(pg_conn, query);
+    
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+#ifndef NOT_MAIN
+        log("Database error when reading %s database %s: %s", 
+            service, filename, PQerrorMessage(pg_conn));
+#endif
+        free(f->pg_binary);
+        free(f);
+        PQclear(res);
+        return NULL;
+    }
+    
+    /* Check if we found data */
+    if (PQntuples(res) == 0) {
+        /* No data found - this is not necessarily an error */
+#ifndef NOT_MAIN
+        if (debug)
+            log("Database file %s not found", filename);
+#endif
+        free(f->pg_binary);
+        free(f);
+        PQclear(res);
+        errno = ENOENT;
+        return NULL;
+    }
+    
+    /* Get the binary data */
+    size_t data_size = PQgetlength(res, 0, 0);
+    const unsigned char *data_ptr = (const unsigned char *)PQgetvalue(res, 0, 0);
+    
+    /* Store the data in our buffer */
+    if (!append_binary_buffer(f->pg_binary, data_ptr, data_size)) {
+#ifndef NOT_MAIN
+        log_perror("Can't allocate memory for data buffer for %s database %s", 
+                   service, filename);
+#endif
+        free(f->pg_binary);
+        free(f);
+        PQclear(res);
+        return NULL;
+    }
+    
+    /* Set up the memory buffer as a FILE* for compatibility with old code */
+    f->fp = fmemopen(f->pg_binary->data, f->pg_binary->size, "rb");
+    if (!f->fp) {
+#ifndef NOT_MAIN
+        log_perror("Can't create memory stream for %s database %s", 
+                   service, filename);
+#endif
+        free_binary_buffer(f->pg_binary);
+        free(f->pg_binary);
+        free(f);
+        PQclear(res);
+        return NULL;
+    }
+    
     f->backupfp = NULL;
+    *f->backupname = 0;
+    
+    PQclear(res);
     return f;
 }
 
@@ -107,115 +357,201 @@ static dbFILE *open_db_read(const char *service, const char *filename)
 static dbFILE *open_db_write(const char *service, const char *filename)
 {
     dbFILE *f;
-    int fd;
-
+    PGresult *res;
+    
+    /* Ensure we have a database connection */
+    if (!pg_conn && !db_init()) {
+#ifndef NOT_MAIN
+        log_perror("Cannot connect to database for writing %s database %s", 
+                   service, filename);
+#endif
+        return NULL;
+    }
+    
+    /* First, create the dbfiles table if it doesn't exist */
+    res = PQexec(pg_conn, 
+          "CREATE TABLE IF NOT EXISTS dbfiles ("
+          "    filename VARCHAR(255) PRIMARY KEY,"
+          "    data BYTEA NOT NULL,"
+          "    last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+          ")");
+    
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+#ifndef NOT_MAIN
+        log("Error creating dbfiles table: %s", PQerrorMessage(pg_conn));
+#endif
+        PQclear(res);
+        return NULL;
+    }
+    PQclear(res);
+    
     f = malloc(sizeof(*f));
     if (!f) {
 #ifndef NOT_MAIN
-	log_perror("Can't read %s database %s", service, filename);
+        log_perror("Can't allocate memory for %s database %s", service, filename);
 #endif
-	return NULL;
+        return NULL;
     }
+    
     strscpy(f->filename, filename, sizeof(f->filename));
-    filename = f->filename;
     f->mode = 'w';
-
+    
+    /* Allocate a binary buffer to store data for later writing to the database */
+    f->pg_binary = malloc(sizeof(BinaryBuffer));
+    if (!f->pg_binary) {
+#ifndef NOT_MAIN
+        log_perror("Can't allocate memory for binary buffer for %s database %s", 
+                   service, filename);
+#endif
+        free(f);
+        return NULL;
+    }
+    
+    init_binary_buffer(f->pg_binary);
+    
+    /* Create a temporary file for writing */
+    f->fp = tmpfile();
+    if (!f->fp) {
+#ifndef NOT_MAIN
+        log_perror("Can't create temporary file for %s database %s", 
+                   service, filename);
+#endif
+        free(f->pg_binary);
+        free(f);
+        return NULL;
+    }
+    
+    /* No need for backup handling - PostgreSQL handles this better */
     *f->backupname = 0;
-    snprintf(f->backupname, sizeof(f->backupname), "%s.save", filename);
-    if (!*f->backupname || strcmp(f->backupname, filename) == 0) {
-	int errno_save = errno;
+    f->backupfp = NULL;
+    
+    /* Write the version number */
+    if (!write_file_version(f)) {
 #ifndef NOT_MAIN
-	log("Opening %s database %s for write: Filename too long",
-		service, filename);
+        log_perror("Can't write version to %s database %s", service, filename);
 #endif
-	free(f);
-	errno = errno_save;
-	return NULL;
+        fclose(f->fp);
+        free(f->pg_binary);
+        free(f);
+        return NULL;
     }
-    unlink(f->backupname);
-    f->backupfp = fopen(filename, "rb");
-    if (rename(filename, f->backupname) < 0 && errno != ENOENT) {
-	int errno_save = errno;
-#ifndef NOT_MAIN
-	static int walloped = 0;
-	if (!walloped) {
-	    walloped++;
-	    canalopers(NULL, "Can't back up %s database %s", service, filename);
-	}
-	errno = errno_save;
-	log_perror("Can't back up %s database %s", service, filename);
-	if (!NoBackupOkay) {
-#endif
-	    if (f->backupfp)
-		fclose(f->backupfp);
-	    free(f);
-	    errno = errno_save;
-	    return NULL;
-#ifndef NOT_MAIN
-	}
-#endif
-	*f->backupname = 0;
-    }
-    unlink(filename);
-    /* Use open() to avoid people sneaking a new file in under us */
-    fd = open(filename, O_WRONLY | O_CREAT | O_EXCL, 0666);
-    f->fp = fdopen(fd, "wb");	/* will fail and return NULL if fd < 0 */
-    if (!f->fp || !write_file_version(f)) {
-	int errno_save = errno;
-#ifndef NOT_MAIN
-	static int walloped = 0;
-	if (!walloped) {
-	    walloped++;
-	    canalopers(NULL, "Can't write to %s database %s", service, filename);
-	}
-	errno = errno_save;
-	log_perror("Can't write to %s database %s", service, filename);
-#endif
-	if (f->fp) {
-	    fclose(f->fp);
-	    unlink(filename);
-	}
-	if (*f->backupname && rename(f->backupname, filename) < 0)
-#ifndef NOT_MAIN
-	    log_perror("Cannot restore backup copy of %s", filename);
-#else
-	    ;
-#endif
-	errno = errno_save;
-	return NULL;
-    }
+    
     return f;
 }
 
 /*************************************************************************/
 
-/* Open a database file for reading (*mode == 'r') or writing (*mode == 'w').
- * Return the stream pointer, or NULL on error.  When opening for write, it
- * is an error for rename() to return an error (when backing up the original
- * file) other than ENOENT, if NO_BACKUP_OKAY is not defined; it is an error
- * if the version number cannot be written to the file; and it is a fatal
- * error if opening the file for write fails and the backup was successfully
- * made but cannot be restored.
+/* Open a database connection for reading (*mode == 'r') or writing (*mode == 'w').
+ * Return the dbFILE pointer, or NULL on error.
  */
 
 dbFILE *open_db(const char *service, const char *filename, const char *mode)
 {
     if (*mode == 'r') {
-	return open_db_read(service, filename);
+        return open_db_read(service, filename);
     } else if (*mode == 'w') {
-	return open_db_write(service, filename);
+        return open_db_write(service, filename);
     } else {
-	errno = EINVAL;
-	return NULL;
+        errno = EINVAL;
+        return NULL;
     }
 }
 
 /*************************************************************************/
 
-/* Restore the database file to its condition before open_db().  This is
- * identical to close_db() for files open for reading; however, for files
- * open for writing, we first attempt to restore any backup file before
- * closing files.
+/* Close a database connection.
+ * For files opened for writing, the data is written to the database.
+ */
+
+void close_db(dbFILE *f)
+{
+    if (f->mode == 'w') {
+        /* Copy data from the temporary file to our binary buffer */
+        char buffer[8192];
+        size_t bytes_read;
+        
+        /* Seek to beginning of file */
+        rewind(f->fp);
+        
+        /* Read data into our binary buffer */
+        while ((bytes_read = fread(buffer, 1, sizeof(buffer), f->fp)) > 0) {
+            if (!append_binary_buffer(f->pg_binary, buffer, bytes_read)) {
+#ifndef NOT_MAIN
+                log_perror("Error buffering data for %s", f->filename);
+#endif
+                break;
+            }
+        }
+        
+        /* Now store the data in the database */
+        char *query_str;
+        size_t query_size;
+        PGresult *res;
+        
+        /* Escape binary data for SQL */
+        size_t escaped_len;
+        char *escaped_data = PQescapeByteaConn(pg_conn, 
+                                            (unsigned char *)f->pg_binary->data, 
+                                            f->pg_binary->size, 
+                                            &escaped_len);
+        
+        if (!escaped_data) {
+#ifndef NOT_MAIN
+            log("Error escaping binary data for %s: %s", 
+                f->filename, PQerrorMessage(pg_conn));
+#endif
+        } else {
+            /* Build and execute query */
+            query_size = escaped_len + 256;
+            query_str = malloc(query_size);
+            
+            if (query_str) {
+                snprintf(query_str, query_size,
+                         "INSERT INTO dbfiles (filename, data) VALUES ('%s', E'%s') "
+                         "ON CONFLICT (filename) DO UPDATE SET data = E'%s', "
+                         "last_modified = CURRENT_TIMESTAMP",
+                         f->filename, escaped_data, escaped_data);
+                
+                res = PQexec(pg_conn, query_str);
+                
+                if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+#ifndef NOT_MAIN
+                    log("Error storing data for %s: %s", 
+                        f->filename, PQerrorMessage(pg_conn));
+#endif
+                } else {
+#ifndef NOT_MAIN
+                    if (debug)
+                        log("Database file %s saved successfully", f->filename);
+#endif
+                }
+                
+                PQclear(res);
+                free(query_str);
+            }
+            
+            PQfreemem(escaped_data);
+        }
+    }
+    
+    if (f->fp)
+        fclose(f->fp);
+    if (f->backupfp)
+        fclose(f->backupfp);
+    
+    /* Free binary buffer if it exists */
+    if (f->pg_binary) {
+        free_binary_buffer(f->pg_binary);
+        free(f->pg_binary);
+    }
+    
+    free(f);
+}
+
+/*************************************************************************/
+
+/* Restore the database file to its condition before open_db().
+ * For PostgreSQL, we use transaction rollback for writing operations.
  */
 
 void restore_db(dbFILE *f)
@@ -223,77 +559,34 @@ void restore_db(dbFILE *f)
     int errno_save = errno;
 
     if (f->mode == 'w') {
-	int ok = 0;	/* Did we manage to restore the old file? */
-	errno = errno_save = 0;
-	if (*f->backupname && strcmp(f->backupname, f->filename) != 0) {
-	    if (rename(f->backupname, f->filename) == 0)
-		ok = 1;
-	}
-	if (!ok && f->backupfp) {
-	    char buf[1024];
-	    int i;
-	    ok = 1;
-	    if (fseek(f->fp, 0, SEEK_SET) < 0)
-		ok = 0;
-	    while (ok && (i = fread(buf, 1, sizeof(buf), f->backupfp)) > 0) {
-		if (fwrite(buf, 1, i, f->fp) != i)
-		    ok = 0;
-	    }
-	    if (ok) {
-		fflush(f->fp);
-		ftruncate(fileno(f->fp), ftell(f->fp));
-	    }
-	}
-#ifndef NOT_MAIN
-	if (!ok && errno > 0)
-	    log_perror("Unable to restore backup of %s", f->filename);
-#endif
-	errno_save = errno;
-	if (f->backupfp)
-	    fclose(f->backupfp);
-	if (*f->backupname)
-	    unlink(f->backupname);
+        /* Roll back any pending changes */
+        PGresult *res = PQexec(pg_conn, "ROLLBACK");
+        PQclear(res);
+        
+        /* Start a new transaction */
+        res = PQexec(pg_conn, "BEGIN");
+        PQclear(res);
     }
+    
+    /* Clean up resources */
     fclose(f->fp);
-    if (!errno_save)
-	errno_save = errno;
+    
+    if (f->pg_binary) {
+        free_binary_buffer(f->pg_binary);
+        free(f->pg_binary);
+    }
+    
     free(f);
     errno = errno_save;
 }
 
 /*************************************************************************/
-
-/* Close a database file.  If the file was opened for write, remove the
- * backup we (may have) created earlier.
- */
-
-void close_db(dbFILE *f)
-{
-    if (f->mode == 'w' && *f->backupname
-			&& strcmp(f->backupname, f->filename) != 0) {
-	if (f->backupfp)
-	    fclose(f->backupfp);
-	unlink(f->backupname);
-    }
-    fclose(f->fp);
-    free(f);
-}
-
-/*************************************************************************/
 /*************************************************************************/
 
-/* Read and write 2- and 4-byte quantities, pointers, and strings.  All
- * multibyte values are stored in big-endian order (most significant byte
- * first).  A pointer is stored as a byte, either 0 if NULL or 1 if not,
- * and read pointers are returned as either (void *)0 or (void *)1.  A
- * string is stored with a 2-byte unsigned length (including the trailing
- * \0) first; a length of 0 indicates that the string pointer is NULL.
- * Written strings are truncated silently at 65534 bytes, and are always
- * null-terminated.
- *
- * All routines return -1 on error, 0 otherwise.
+/* Read and write 2- and 4-byte quantities, pointers, and strings.
+ * These functions work exactly the same as before, since we're still
+ * using FILE* interfaces for compatibility.
  */
-
 
 int read_int16(uint16 *ret, dbFILE *f)
 {

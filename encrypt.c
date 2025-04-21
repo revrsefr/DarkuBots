@@ -5,9 +5,9 @@
  * This program is free but copyrighted software; see the file COPYING for
  * details.
  *
- * DarkuBots es una adaptaci�n de Javier Fern�ndez Vi�a, ZipBreake.
+ * DarkuBots es una adaptacion de Javier Fernández Viña, ZipBreake.
+ * reworked and updated to modern IRCD Inspircd by reverse Jean Chevronnet.
  * E-Mail: javier@jfv.es || Web: http://jfv.es/
- *
  * Bcrypt implementation added on April 21, 2025 - replacing insecure MD5
  */
 

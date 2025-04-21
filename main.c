@@ -15,14 +15,16 @@
  * along with this program (see the file COPYING); if not, write to the
  * Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * DarkuBots es una adaptación de Javier Fernández Viña, ZipBreake.
+ * DarkuBots es una adaptaciÃ³n de Javier FernÃ¡ndez ViÃ±a, ZipBreake.
  * E-Mail: javier@jfv.es || Web: http://jfv.es/
  *
+ * PostgreSQL support added on April 21, 2025 by reverse
  */
 
 #include "services.h"
 #include "timeout.h"
 #include "version.h"
+#include "datafiles.h"
 
 
 /******** Global variables! ********/
@@ -81,7 +83,7 @@ void sighandler(int signum)
 	    signal(SIGHUP, SIG_IGN);
 	    log("Recibido SIGHUP, reiniciando.");
 	    if (!quitmsg)
-		quitmsg = "Reiniciando por señal SIGHUP";
+		quitmsg = "Reiniciando por seÃ±al SIGHUP";
 	    longjmp(panic_jmp, 1);
 	} else if (signum == SIGTERM) {
 	    save_data = 1;
@@ -89,7 +91,7 @@ void sighandler(int signum)
 	    signal(SIGTERM, SIG_IGN);
 	    signal(SIGHUP, SIG_IGN);
 	    log("Recibido SIGTERM, saliendo.");
-	    quitmsg = "Cierre conexion por señal SIGTERM";
+	    quitmsg = "Cierre conexion por seÃ±al SIGTERM";
 	    longjmp(panic_jmp, 1);
 	} else if (signum == SIGINT || signum == SIGQUIT) {
 	    /* nothing -- terminate below */
@@ -137,7 +139,7 @@ void sighandler(int signum)
 #if HAVE_STRSIGNAL
 	snprintf(quitmsg, BUFSIZE, "Services ha terminado: %s", strsignal(signum));
 #else
-	snprintf(quitmsg, BUFSIZE, "Services ha terminado por señal %d", signum);
+	snprintf(quitmsg, BUFSIZE, "Services ha terminado por seÃ±al %d", signum);
 #endif
 	quitting = 1;
     }
@@ -166,6 +168,14 @@ int main(int ac, char **av, char **envp)
     if ((i = init(ac, av)) != 0)
 	return i;
 
+    /* Initialize PostgreSQL database connection */
+    if (!db_init()) {
+        log("ERROR: Failed to connect to PostgreSQL database. Services will run with limited functionality.");
+        if (!nofork && isatty(2))
+            fprintf(stderr, "ERROR: Failed to connect to PostgreSQL database. Services will run with limited functionality.\n");
+    } else {
+        log("Successfully connected to PostgreSQL database");
+    }
 
     /* We have a line left over from earlier, so process it first. */
     process();
@@ -266,6 +276,10 @@ int main(int ac, char **av, char **envp)
 	    quitmsg = "Reiniciando";
 	send_cmd(ServerName, "SQUIT %s 0 :%s", ServerName, quitmsg);
 	disconn(servsock);
+	
+	/* Clean up PostgreSQL connection before restart */
+	db_cleanup();
+	
 	close_log();
 	execve(SERVICES_BIN, av, envp);
 	if (!readonly) {
@@ -281,11 +295,15 @@ int main(int ac, char **av, char **envp)
 
     /* Disconnect and exit */
     if (!quitmsg)
-	quitmsg = "Services ha terminado, razón desconocida";
+	quitmsg = "Services ha terminado, razÃ³n desconocida";
     log("%s", quitmsg);
     if (started)
         send_cmd(ServerName, "SQUIT %s 0 :%s", ServerName, quitmsg);
     disconn(servsock);
+    
+    /* Clean up PostgreSQL connection */
+    db_cleanup();
+    
     return 0;
 }
 

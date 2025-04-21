@@ -5,8 +5,10 @@
  * This program is free but copyrighted software; see the file COPYING for
  * details.
  *
- * DarkuBots es una adaptaciÛn de Javier Fern·ndez ViÒa, ZipBreake.
+ * DarkuBots es una adaptaci√≥n de Javier Fern√°ndez Vi√±a, ZipBreake.
  * E-Mail: javier@jfv.es || Web: http://jfv.es/
+ *
+ * PostgreSQL support added on April 21, 2025 by reverse
  *
  */
 
@@ -14,6 +16,13 @@
 #define DATAFILES_H
 
 /*************************************************************************/
+
+/* Structure to hold binary data for PostgreSQL */
+typedef struct {
+    char *data;      /* Binary data buffer */
+    size_t size;     /* Current size of data */
+    size_t alloc;    /* Allocated size of buffer */
+} BinaryBuffer;
 
 typedef struct dbFILE_ dbFILE;
 struct dbFILE_ {
@@ -23,12 +32,15 @@ struct dbFILE_ {
 				 *    the database file (if non-NULL) */
     char filename[PATH_MAX];	/* Name of the database file */
     char backupname[PATH_MAX];	/* Name of the backup file */
+    BinaryBuffer *pg_binary;    /* PostgreSQL binary data buffer */
 };
 
 /*************************************************************************/
 
 /* Prototypes and macros: */
 
+E int db_init(void);             /* Initialize the PostgreSQL connection */
+E void db_cleanup(void);         /* Clean up PostgreSQL connection */
 E void check_file_version(dbFILE *f);
 E int get_file_version(dbFILE *f);
 E int write_file_version(dbFILE *f);
