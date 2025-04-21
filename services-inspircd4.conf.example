@@ -1,0 +1,216 @@
+# Sample configuration file for DarkuBots Services with InspIRCd 4
+# Copy this file to services.conf and edit as necessary.
+
+###########################################################################
+# Network information (REQUIRED)
+###########################################################################
+
+# ServerName - The name of the Services server
+# This is the name that appears on a /whois of a Services
+# client. The name must follow standard IRC hostname format.
+# Required settings: YES
+
+ServerName    "services.irc.network"
+
+# ServerDesc - Services server description
+# This is shown in a /links of the Services server.
+# Required settings: YES
+
+ServerDesc    "InspIRCd 4 Services"
+
+# NetworkName - Name for the network Services is connecting to
+# This is displayed by the various Services bots in their
+# welcome messages, etc.
+# Required settings: YES
+
+NetworkName   "MyIRCNetwork"
+
+# NetworkDomain - Network domain name
+# This is displayed in various welcome messages.
+# Required settings: NO
+
+NetworkDomain "irc.network"
+
+###########################################################################
+# Server linking information (REQUIRED)
+###########################################################################
+
+# RemoteServer - Server to connect to
+# This is the hostname of the remote server services connects to.
+# Required settings: YES
+
+RemoteServer  "127.0.0.1"
+
+# RemotePort - Port to connect to on the remote server
+# This is the port services connects to on the remote server.
+# Required settings: YES
+
+RemotePort    7000
+
+# RemotePassword - Password for Services connection
+# This is the password services uses to connect to the remote server.
+# Required settings: YES
+
+RemotePassword "mylinksecret"
+
+# ServerUID - Server ID for InspIRCd 4 protocol
+# This is the server ID (SID) used by services for the InspIRCd 4 protocol.
+# It must be 3 characters long and unique on the network.
+# Required settings: Only for InspIRCd 4
+
+ServerUID     "100"
+
+# LocalAddress - Local address to bind to
+# This is the address services will bind to before connecting to the remote
+# server. If not specified, services will let the OS choose the address.
+# Required settings: NO
+
+#LocalAddress "127.0.0.1"
+
+###########################################################################
+# Services configuration (REQUIRED)
+###########################################################################
+
+# ServiceUser - Username of services clients
+# This is the username that appears on an /whois of a Services client
+# Required settings: YES
+
+ServiceUser   "services"
+
+# ServicesDir - Where Services should look for its data files
+# This is the directory where Services stores its database files
+# and where help files are located.
+# Required settings: YES
+
+ServicesDir   "/home/reverse/irc/services/DarkuBots/data"
+
+###########################################################################
+# Service-specific nicknames (REQUIRED)
+###########################################################################
+
+# NickServName - Nickname of the NickServ service
+# This is the nickname of the user on the network that will be NickServ.
+# Required settings: YES
+
+NickServName "NickServ"
+
+# ChanServName - Nickname of the ChanServ service
+# This is the nickname of the user on the network that will be ChanServ.
+# Required settings: YES
+
+ChanServName "ChanServ"
+
+# MemoServName - Nickname of the MemoServ service
+# This is the nickname of the user on the network that will be MemoServ.
+# Required settings: YES
+
+MemoServName "MemoServ"
+
+# OperServName - Nickname of the OperServ service
+# This is the nickname of the user on the network that will be OperServ.
+# Required settings: YES
+
+OperServName "OperServ"
+
+# HelpServName - Nickname of the HelpServ service
+# This is the nickname of the user on the network that will be HelpServ.
+# This is optional, if not defined HelpServ will not be available.
+# Required settings: NO
+
+HelpServName "HelpServ"
+
+# CyberServName - Nickname of the CyberServ service
+# This is the nickname of the user on the network that will be CyberServ.
+# This is optional, if not defined CyberServ will not be available.
+# Required settings: NO
+
+CyberServName "CyberServ"
+
+# BDDServName - Nickname of the BDDServ service 
+# This is the nickname of the user on the network that will be BDDServ.
+# This is optional, if not defined BDDServ will not be available.
+# Required settings: NO
+
+BDDServName "BDDServ"
+
+# RootNickName - Nickname for the Services Root account
+# This is the nickname of the global Services Admin
+# Required settings: YES
+
+RootNickName "OperAdmin"
+
+###########################################################################
+# InspIRCd 4 Protocol Configuration
+###########################################################################
+
+# InspIRCdCapabilities - Defines capabilities to negotiate with the IRCd
+# This is a list of capabilities that Services should negotiate with InspIRCd.
+# Required settings: Only for InspIRCd 4
+
+InspIRCdCapabilities "PROTOCOL=1202"
+
+# InspIRCdUserModes - Default user modes for services clients
+# These are the modes that will be set on services clients when they connect.
+# Required settings: Only for InspIRCd 4
+
+InspIRCdUserModes "io"  # Invisible and IRC operator
+
+###########################################################################
+# Database and other operational settings (REQUIRED)
+###########################################################################
+
+# DatabaseName - Database file name
+# This is the file that Services will use to store all of its information.
+# Required settings: YES
+
+DatabaseName "services.db"
+
+# LogFile - Where should Services log be stored?
+# Services will log to this file if LogChan is not defined.
+# Required settings: YES (unless LogChan is defined)
+
+LogFile "services.log"
+
+# LogChannel - Services log channel
+# If defined, Services will log to this channel. The channel must exist and
+# be registered with ChanServ before it can be used.
+# Required settings: NO
+
+#LogChannel "#services"
+
+# ExpireTimeout - How many days before a nick/channel expires?
+# This is the amount of time without activity before a nick or channel
+# expires. If set to 0, nicks and channels never expire.
+# Required settings: YES
+
+ExpireTimeout 30
+
+###########################################################################
+# Access Security Settings
+###########################################################################
+
+# RootPass - Password for the Services Root account
+# This is the password for the Services Admin.
+# Required settings: YES
+
+RootPass "myRootPassword"
+
+# SuperAdmin - Add a Network Services Admin
+# This defines users with access to all services commands.
+# You can have multiple SuperAdmin lines.
+# Required settings: NO
+
+#SuperAdmin "admin1"
+#SuperAdmin "admin2"
+
+# ServicesOper - Add a Services Operator
+# This defines users with access to less sensitive OperServ commands.
+# You can have multiple ServicesOper lines.
+# Required settings: NO
+
+#ServicesOper "oper1"
+#ServicesOper "oper2"
+
+###########################################################################
+# End of configuration file
+###########################################################################

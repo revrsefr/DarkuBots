@@ -5,7 +5,7 @@
  * This program is free but copyrighted software; see the file COPYING for
  * details.
  *
- * DarkuBots es una adaptación de Javier Fernández Viña, ZipBreake.
+ * DarkuBots es una adaptaciï¿½n de Javier Fernï¿½ndez Viï¿½a, ZipBreake.
  * E-Mail: javier@jfv.es || Web: http://jfv.es/
  *
  */
@@ -26,6 +26,11 @@ char *ServerName;
 char *ServerDesc;
 #ifdef IRC_UNDERNET_P10
 int  ServerNumerico;
+#endif
+#ifdef IRC_INSPIRCD_4
+char *ServerUID;  /* Server ID for InspIRCd */
+char *InspIRCdCapabilities;  /* Capabilities string for InspIRCd */
+char *InspIRCdUserModes;  /* Default user modes for services clients */
 #endif
 char *ServerHUB;
 char *ServiceUser;
@@ -278,6 +283,11 @@ Directive directives[] = {
     { "ServerName",       { { PARAM_STRING, 0, &ServerName } } },
 #ifdef IRC_UNDERNET_P10
     { "ServerNumerico",   { { PARAM_INT, 0, &ServerNumerico } } },
+#endif
+#ifdef IRC_INSPIRCD_4
+    { "ServerUID",        { { PARAM_STRING, 0, &ServerUID } } },
+    { "InspIRCdCapabilities", { { PARAM_STRING, 0, &InspIRCdCapabilities } } },
+    { "InspIRCdUserModes", { { PARAM_STRING, 0, &InspIRCdUserModes } } },
 #endif
     { "ServicesRoot",     { { PARAM_STRING, 0, &ServicesRoot } } },
     { "ServiceUser",      { { PARAM_STRING, 0, &temp_userhost } } },

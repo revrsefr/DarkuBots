@@ -14,6 +14,8 @@
 #define DB_NETWORKS
 #define IRC_HISPANO
 #define DB_UPWORLD
+#define IRC_INSPIRCD 
+#define IRC_INSPIRCD_4
 #define REG_NICK_MAIL
 #define SENDMAIL
 

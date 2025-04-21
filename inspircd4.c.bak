@@ -1,0 +1,222 @@
+/* InspIRCd 4 protocol module for DarkuBots Services
+ *
+ * Services is copyright (c) 1996-1999 Andy Church.
+ *     E-mail: <achurch@dragonfire.net>
+ * This program is free but copyrighted software; see the file COPYING for
+ * details.
+ *
+ * InspIRCd 4 protocol module added on April 21, 2025
+ */
+
+#ifdef IRC_INSPIRCD_4
+
+#include "services.h"
+
+/* InspIRCd UID format: SAIAAAB = Server ID 'S' + 'A' (fixed) + client ID */
+#define UID_LEN 9
+
+/* InspIRCd 4 protocol message handlers */
+
+/**
+ * Convert a UID to a server ID
+ * @param uid The UID to convert
+ * @return The server ID portion
+ */
+char *uid_to_sid(const char *uid) {
+    static char sid[4];
+    if (!uid || strlen(uid) < 3)
+        return NULL;
+    strncpy(sid, uid, 3);
+    sid[3] = '\0';
+    return sid;
+}
+
+/**
+ * Determine if a string is a valid UID
+ * @param str The string to check
+ * @return 1 if valid, 0 if not
+ */
+int is_valid_uid(const char *str) {
+    if (!str || strlen(str) != UID_LEN)
+        return 0;
+    
+    /* First char must be a digit or uppercase letter (server id) */
+    if (!isalnum(str[0]) || islower(str[0]))
+        return 0;
+    
+    /* Second char must be 'A' for extended UIDs */
+    if (str[1] != 'A')
+        return 0;
+    
+    /* Chars 3-9 must be alphanumeric */
+    for (int i = 2; i < UID_LEN; i++) {
+        if (!isalnum(str[i]))
+            return 0;
+    }
+    
+    return 1;
+}
+
+/**
+ * Parse InspIRCd channel modes
+ * @param modes The mode string to parse
+ * @param chan The channel structure to update
+ * @return Updated mode value
+ */
+int parse_inspircd_chan_modes(const char *modes, Channel *chan) {
+    int add = 1;
+    int i;
+    int32 mode = 0;
+    const char *param;
+    
+    if (!modes || !chan)
+        return 0;
+    
+    for (i = 0; modes[i]; i++) {
+        switch (modes[i]) {
+            case '+': add = 1; break;
+            case '-': add = 0; break;
+            case 'i': 
+                if (add) mode |= CMODE_I;
+                else mode &= ~CMODE_I;
+                break;
+            case 'm': 
+                if (add) mode |= CMODE_M;
+                else mode &= ~CMODE_M;
+                break;
+            case 'n': 
+                if (add) mode |= CMODE_N;
+                else mode &= ~CMODE_N;
+                break;
+            case 'p': 
+                if (add) mode |= CMODE_P;
+                else mode &= ~CMODE_P;
+                break;
+            case 's': 
+                if (add) mode |= CMODE_s;
+                else mode &= ~CMODE_s;
+                break;
+            case 't': 
+                if (add) mode |= CMODE_T;
+                else mode &= ~CMODE_T;
+                break;
+            case 'r': 
+                if (add) mode |= CMODE_r;
+                else mode &= ~CMODE_r;
+                break;
+            case 'c': 
+                if (add) mode |= CMODE_c;
+                else mode &= ~CMODE_c;
+                break;
+            case 'C': 
+                if (add) mode |= CMODE_C;
+                else mode &= ~CMODE_C;
+                break;
+            case 'O': 
+                if (add) mode |= CMODE_O;
+                else mode &= ~CMODE_O;
+                break;
+            case 'k':
+                if (add) {
+                    /* Key requires a parameter */
+                    mode |= CMODE_K;
+                    /* Get the param and store the key */
+                    /* In a real implementation, we'd extract the parameter */
+                } else {
+                    mode &= ~CMODE_K;
+                    if (chan->key) {
+                        free(chan->key);
+                        chan->key = NULL;
+                    }
+                }
+                break;
+            case 'l':
+                if (add) {
+                    /* Limit requires a parameter */
+                    mode |= CMODE_L;
+                    /* Get the param and store the limit */
+                    /* In a real implementation, we'd extract the parameter */
+                } else {
+                    mode &= ~CMODE_L;
+                    chan->limit = 0;
+                }
+                break;
+        }
+    }
+    
+    return mode;
+}
+
+/**
+ * Parse InspIRCd user modes
+ * @param modes The mode string to parse
+ * @return Updated mode value
+ */
+int32 parse_inspircd_user_modes(const char *modes) {
+    int add = 1;
+    int i;
+    int32 mode = 0;
+    
+    if (!modes)
+        return 0;
+    
+    for (i = 0; modes[i]; i++) {
+        switch (modes[i]) {
+            case '+': add = 1; break;
+            case '-': add = 0; break;
+            case 'o': 
+                if (add) mode |= UMODE_O;
+                else mode &= ~UMODE_O;
+                break;
+            case 'i': 
+                if (add) mode |= UMODE_I;
+                else mode &= ~UMODE_I;
+                break;
+            case 's': 
+                if (add) mode |= UMODE_S;
+                else mode &= ~UMODE_S;
+                break;
+            case 'w': 
+                if (add) mode |= UMODE_W;
+                else mode &= ~UMODE_W;
+                break;
+            case 'z': 
+                if (add) mode |= UMODE_Z;
+                else mode &= ~UMODE_Z;
+                break;
+            case 'h': 
+                if (add) mode |= UMODE_H;
+                else mode &= ~UMODE_H;
+                break;
+            case 'r': 
+                if (add) mode |= UMODE_R;
+                else mode &= ~UMODE_R;
+                break;
+            case 'x': 
+                if (add) mode |= UMODE_X;
+                else mode &= ~UMODE_X;
+                break;
+        }
+    }
+    
+    return mode;
+}
+
+/**
+ * Generate a UID for services
+ * @param nick The nickname to generate a UID for
+ * @return The generated UID
+ */
+char *generate_uid(const char *sid, const char *nick) {
+    static char uid[UID_LEN+1];
+    static int counter = 0;
+    
+    if (!sid || strlen(sid) != 3)
+        return NULL;
+    
+    /* Format: SID + 'A' + 5 chars */
+    snprintf(uid, sizeof(uid), "%sA%05X", sid, counter++ % 0xFFFFF);
+    return uid;
+}
+
+#endif /* IRC_INSPIRCD_4 */

@@ -5,7 +5,7 @@
 # This program is free but copyrighted software; see the file COPYING for
 # details.
 #
-# DarkuBots es una adaptación de Javier Fernández Viña, ZipBreake.
+# DarkuBots es una adaptaciï¿½n de Javier Fernï¿½ndez Viï¿½a, ZipBreake.
 # E-Mail: javier@jfv.es || Web: http://jfv.es/
 # 
 
@@ -43,14 +43,14 @@ OBJS =	actions.o akill.o channels.o chanserv.o cregserv.o commands.o compat.o \
 	log.o main.o memory.o memoserv.o messages.o misc.o news.o \
 	nickserv.o operserv.o process.o send.o sockutil.o \
 	timeout.o users.o correo.o   \
-        P10.o servers.o bdd.o\
+        P10.o servers.o bdd.o inspircd.o \
 	$(VSNPRINTF_O)
 SRCS =	actions.c akill.c channels.c chanserv.c cregserv.c commands.c compat.c \
 	config.c datafiles.c encrypt.c helpserv.c init.c language.c \
 	log.c main.c memory.c memoserv.c messages.c misc.c news.c \
 	nickserv.c operserv.c process.c send.c sockutil.c \
 	timeout.c users.c correo.c \
-        P10.c servers.c bdd.c\
+        P10.c servers.c bdd.c inspircd.c \
 	$(VSNPRINTF_C)
 
 .c.o:
@@ -130,6 +130,7 @@ servers.o:	servers.c	services.h pseudo.h
 sockutil.o:	sockutil.c	services.h
 timeout.o:	timeout.c	services.h timeout.h
 P10.o:		P10.c		services.h
+inspircd.o:	inspircd.c	services.h
 users.o:	users.c		services.h
 vsnprintf.o:	vsnprintf.c
 

@@ -5,7 +5,7 @@
  * This program is free but copyrighted software; see the file COPYING for
  * details.
  *
- * DarkuBots es una adaptación de Javier Fernández Viña, ZipBreake.
+ * DarkuBots es una adaptaciï¿½n de Javier Fernï¿½ndez Viï¿½a, ZipBreake.
  * E-Mail: javier@jfv.es || Web: http://jfv.es/
  *
  */
@@ -450,6 +450,13 @@ int init(int ac, char **av)
     servsock = conn(RemoteServer, RemotePort, LocalHost, LocalPort);
     if (servsock < 0)
 	fatal_perror("No puedo conectar al servidor");
+    
+#ifdef IRC_INSPIRCD_4
+    /* InspIRCd 4 has a different protocol initialization sequence */
+    /* Protocol functions will be called through function pointers */
+    init_protocol();
+    server_connect();
+#else
     send_cmd(NULL, "PASS :%s", RemotePassword);
 #ifdef IRC_UNDERNET_P09
     send_cmd(NULL, "SERVER %s 1 %lu %lu P09 :%s",
@@ -458,6 +465,8 @@ int init(int ac, char **av)
     send_cmd(NULL, "SERVER %s %d 0 %ld J10 %cD] :%s",
              ServerName, 2, start_time, convert2y[ServerNumerico], ServerDesc); 
 #endif
+#endif /* IRC_INSPIRCD_4 */
+
     sgets2(inbuf, sizeof(inbuf), servsock);
     if (strnicmp(inbuf, "ERROR", 5) == 0) {
 	/* Close server socket first to stop wallops, since the other

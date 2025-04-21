@@ -5,7 +5,7 @@
  * This program is free but copyrighted software; see the file COPYING for
  * details.
  *
- * DarkuBots es una adaptación de Javier Fernández Viña, ZipBreake.
+ * DarkuBots es una adaptaciï¿½n de Javier Fernï¿½ndez Viï¿½a, ZipBreake.
  * E-Mail: javier@jfv.es || Web: http://jfv.es/
  *
  */
@@ -138,6 +138,11 @@ E char *ServerName;
 #ifdef IRC_UNDERNET_P10
 E int   ServerNumerico;
 #endif 
+#ifdef IRC_INSPIRCD_4
+E char *ServerUID;
+E char *InspIRCdCapabilities;
+E char *InspIRCdUserModes;
+#endif
 E char *ServerHUB;
 E char *ServerDesc;
 E char *ServiceUser;
@@ -544,5 +549,27 @@ E void split_usermask(const char *mask, char **nick, char **user, char **host);
 E char *create_mask(User *u);
 E void join_shadow_chan(const char *canal);
 E void part_shadow_chan(const char *canal);
+
+
+/**** inspircd.c and inspircd4.c ****/
+
+#ifdef IRC_INSPIRCD_4
+/* Protocol function pointers */
+E void (*server_connect)(void);
+E int (*process)(char *buf);
+E void (*send_cmd)(const char *source, const char *fmt, ...);
+E void (*notice_user)(const char *source, const char *dest, const char *msg);
+E void (*notice_channel)(const char *source, const char *dest, const char *msg);
+E void (*privmsg_user)(const char *source, const char *dest, const char *msg);
+E void (*set_channel_mode)(const char *source, const char *channel, const char *modes);
+E void (*join_channel)(const char *source, const char *channel);
+
+/* InspIRCd protocol functions */
+E void init_protocol(void);
+E int parse_inspircd_chan_modes(const char *modes, Channel *chan);
+E int32 parse_inspircd_user_modes(const char *modes);
+E int is_valid_uid(const char *str);
+#endif
+
 #endif	/* EXTERN_H */
 

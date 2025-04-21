@@ -5,7 +5,7 @@
  * This program is free but copyrighted software; see the file COPYING for
  * details.
  *
- * DarkuBots es una adaptación de Javier Fernández Viña, ZipBreake.
+ * DarkuBots es una adaptaciï¿½n de Javier Fernï¿½ndez Viï¿½a, ZipBreake.
  * E-Mail: javier@jfv.es || Web: http://jfv.es/
  *
  */
@@ -94,6 +94,13 @@ extern int toupper(char), tolower(char);
 # undef int32
 #endif
 
+/* InspIRCd 4 specific definitions */
+#ifdef IRC_INSPIRCD_4
+# define IRCD_BUFSIZE 512
+# define MAXLEN_PRIVMSG 512
+# define MAX_IRC_BUF 512
+# define INSPIRCD_UID_LEN 9
+#endif
 
 /* Miscellaneous definitions. */
 #include "defs.h"
@@ -251,7 +258,7 @@ struct nickinfo_ {
  * the order the languages are displayed in for NickServ HELP SET LANGUAGE,
  * do it in language.c.
  */
-#define LANG_ES		0	/* Español */
+#define LANG_ES		0	/* Espaï¿½ol */
 #define LANG_CA		1	/* Catalan */
 #define LANG_EN_US	2	/* United States English */
 #define LANG_JA_JIS	3	/* Japanese (JIS encoding) */
